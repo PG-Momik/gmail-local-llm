@@ -1,0 +1,21 @@
+{
+  "type": "module",
+  "dependencies": {
+    "googleapis": "latest",
+    "sqlite3": "latest",
+    "dotenv": "latest"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "name": "gmail-local-llm",
+  "version": "1.0.0",
+  "main": "main.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
