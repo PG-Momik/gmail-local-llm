@@ -13,8 +13,8 @@ const config = {
     path: path.join(__dirname, '..', 'email_analysis.db'),
   },
   gmail: {
-    searchQuery: 'after:2025/07/01',
-    batchSize: 2,
+    searchQuery: 'after:2025/01/01',
+    batchSize: 100,
     rateLimitDelay: 1000,
   },
   analysis: {
@@ -28,8 +28,8 @@ const config = {
     tokens: process.env.GOOGLE_TOKENS,
   },
   llm: {
-    baseUrl: process.env.OLLAMA_URL || 'http://localhost:11434',
-    model: process.env.OLLAMA_MODEL || 'phi3',
+    baseUrl: process.env.OLLAMA_URL,
+    model: process.env.OLLAMA_MODEL,
     timeout: parseInt(process.env.OLLAMA_TIMEOUT) || 30000,
     temperature: parseFloat(process.env.OLLAMA_TEMPERATURE) || 0.1,
     maxSnippetLength: parseInt(process.env.LLM_MAX_SNIPPET_LENGTH) || 1000,

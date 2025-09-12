@@ -63,21 +63,18 @@ export function createEmailProcessor(gmail, classifier) {
     const subjectHeader = headers.find(h => h.name === 'Subject') || { value: 'No Subject' };
     const fromHeader = headers.find(h => h.name === 'From') || { value: 'Unknown Sender' };
 
-    // Extract the full email body
     let body = '';
+
     if (messageData.payload.mimeType === 'text/plain') {
       body = Buffer.from(messageData.payload.body.data, 'base64').toString('utf-8');
-    } else if (messageData.payload.mimeType === 'multipart/alternative' ||
-        messageData.payload.mimeType === 'multipart/mixed') {
-      const textPart = messageData.payload.parts.find(part =>
-          part.mimeType === 'text/plain'
-      );
+    } else if (messageData.payload.mimeType === 'multipart/alternative' || messageData.payload.mimeType === 'multipart/mixed') {
+      const textPart = messageData.payload.parts.find(part => part.mimeType === 'text/plain');
+
       if (textPart) {
         body = Buffer.from(textPart.body.data, 'base64').toString('utf-8');
       } else {
-        const htmlPart = messageData.payload.parts.find(part =>
-            part.mimeType === 'text/html'
-        );
+        const htmlPart = messageData.payload.parts.find(part => part.mimeType === 'text/html');
+
         if (htmlPart) {
           body = Buffer.from(htmlPart.body.data, 'base64').toString('utf-8');
           body = body.replace(/<[^>]*>/g, '');

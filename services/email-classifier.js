@@ -2,47 +2,47 @@ import config from '../config/config.js';
 
 export async function createEmailClassifier() {
   const SYSTEM_PROMPT = `
-  You are an AI assistant specialized in analyzing job-related emails.
-  Your task is to analyze the provided email snippet and classify it into the following structured JSON format:
-
-  Respond ONLY with this JSON format:
-  {
-    "is_related_to_job": boolean,
-    "is_automated": boolean,
-    "snippet": string|null,
-    "category": "rejection" | "interview" | "application" | "offer" | "followup" | "alert" | "other",    
-    "source_platform": string | null,
-    "job_title": string | null,
-    "company": string | null,
-    "location": string | null,
-    "is_international": boolean
-  }
-
-  Where each property basically describes:
-    is_related_to_job - Mail is related to job or not. This can be determined by the contents of the email.
-    is_automated - Mail is automated mail or not. This can be determined based on the email sender's email address.
-    snippet - Short summary of mail. 1 liner. This should reflect the nature of the email and category.
-    category - Type of mail. The category depends on the nature of the mail. You have to figure out if the mail is just an alert, or a confirmation mail for my application or an alert of me being rejected. BE EXTRA METICULOUS HERE.
-    source_platform - Platform that the mail came from (LinkedIn, ZipRecruiter, Indeed, their own platform)
-    job_title - Job title mentioned in the mail. Most likely this can be found in the email body.
-    company - Name of the company. This can be found in the email body as well.
-    location - What kind of role was it, remote, onsite, hybrid. This can be figured out using email body, job title on the email body, you'll find clues like APAC, EMAM, US, Worldwide, etc.
-    is_international - If the company is outside Nepal, consider it international
-  
-  Rules:
-  - Respond ONLY with a valid JSON object. Do NOT include Markdown, code blocks, or any text outside the JSON.
-  - Set fields to null if the information is not present or unclear.
-  - Insert null values if the values are indeterminate.
-
+    You are an AI email classifier.
+    
+    Analyze the email and respond ONLY with a JSON object in this format:
+    {
+      "is_related_to_job": boolean,
+      "is_automated": boolean,
+      "snippet": string|null,
+      "category": "rejection" | "interview" | "application" | "offer" | "followup" | "alert" | "other",
+      "source_platform": string|null,
+      "job_title": string|null,
+      "company": string|null,
+      "location": string|null,
+      "is_international": boolean
+    }
+    
+    Rules:
+    - Categories:
+       - alert = multiple job listings, recommendations, alerts (LinkedIn, Indeed, etc.)
+       - application = confirmation of YOUR submitted application
+       - rejection = not moving forward, regret, unfortunately
+       - interview = interview invite/schedule
+       - offer = job offer or selection
+       - followup = checking status, asking for info
+       - other = everything else
+    - is_automated = noreply@, bulk alerts, system notifications
+    - source_platform = LinkedIn, Indeed, ZipRecruiter, or company domain
+    - is_international = true if company/job is outside Nepal
+    - snippet = one short sentence summary
+    - If info not found, set field to null
+    - No extra text, Markdown, or explanation — JSON only
   `;
 
   async function classify(emailSnippet, gmailId, from, subject, mailReceivedOn) {
     console.log('Classifying email snippet:', emailSnippet, '\n');
     try {
       const truncatedSnippet = emailSnippet.substring(0, config.llm.maxSnippetLength);
+
       const prompt = `
-      Analyze this email snippet and classify it according to the provided instructions.
-      Email snippet: "${truncatedSnippet}"
+        FROM: ${from}
+        SUBJECT: ${subject}
+        CONTENT: "${truncatedSnippet}"
       `;
 
       const response = await fetch(`${config.llm.baseUrl}/api/chat`, {
@@ -60,40 +60,51 @@ export async function createEmailClassifier() {
         signal: AbortSignal.timeout(config.llm.timeout),
       });
 
-      if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`LLM API error: ${response.status} ${response.statusText}`);
 
       const data = await response.json();
-      console.log('LLM Response:', data.message.content);
-
-      const result = JSON.parse(data.message.content);
+      let cleaned = data.message.content.trim().replace(/^```json\n?|```$/g, '');
+      const result = JSON.parse(cleaned);
 
       return {
         gmailId,
-        ...result,
+        ...validateAndCleanResult(result),
         mail_received_on: mailReceivedOn
       };
     } catch (error) {
-      console.error('Error in email classification:', error.message);
+      console.error('Error in classification:', error.message);
       return fallbackClassification(emailSnippet, gmailId, from, subject, mailReceivedOn);
     }
   }
 
-  function fallbackClassification(emailSnippet, gmailId, from, subject, mailReceivedOn) {
-    const lowerSnippet = emailSnippet.toLowerCase();
-    const rejectionKeywords = config.llm.rejectionKeywords;
+  function validateAndCleanResult(result) {
+    const validCategories = ["rejection", "interview", "application", "offer", "followup", "alert", "other"];
+    return {
+      is_related_to_job: !!result.is_related_to_job,
+      is_automated: !!result.is_automated,
+      snippet: result.snippet || null,
+      category: validCategories.includes(result.category) ? result.category : "other",
+      source_platform: result.source_platform || null,
+      job_title: result.job_title || null,
+      company: result.company || null,
+      location: result.location || null,
+      is_international: !!result.is_international
+    };
+  }
 
-    const isRejection = rejectionKeywords.some(keyword =>
-        lowerSnippet.includes(keyword.toLowerCase())
-    );
+  function fallbackClassification(emailSnippet, gmailId, from, subject, mailReceivedOn) {
+    const text = `${emailSnippet} ${subject}`.toLowerCase();
+    let category = "other";
+    if (/unfortunately|regret|not selected|other candidates/.test(text)) category = "rejection";
+    else if (/job alert|new jobs|jobs for you|recommendations/.test(text)) category = "alert";
+    else if (/application received|thank you for applying|submitted/.test(text)) category = "application";
 
     return {
       gmailId,
       is_related_to_job: true,
-      is_automated: false,
-      snippet: "Fallback: Could not confidently classify email.",
-      category: isRejection ? "rejection" : "other",
+      is_automated: /noreply|no-reply|donotreply/.test(from.toLowerCase()),
+      snippet: `Fallback classification: ${category}`,
+      category,
       source_platform: null,
       job_title: null,
       company: null,

@@ -21,19 +21,15 @@ async function getTokens() {
     scope: scopes,
   });
 
-  console.log('🔗 Visit this URL to authorize the application:');
-  console.log(authUrl);
-  console.log('\n');
-
-  rl.question('📋 Enter the authorization code you receive: ', async (code) => {
+  rl.question('Enter the authorization code you receive: ', async (code) => {
     try {
       const { tokens } = await oauth2Client.getToken(code);
       
-      console.log('\n✅ Success! Add this to your .env file:');
+      console.log('\n Success! Add this to your .env file:');
       console.log(`GOOGLE_TOKENS='${JSON.stringify(tokens)}'`);
       
     } catch (error) {
-      console.error('❌ Error retrieving access token:', error);
+      console.error('Error retrieving access token:', error);
     }
     rl.close();
   });
